@@ -11,7 +11,10 @@
   },
   "dependencies": {
     "@material/material-color-utilities": "^0.4.0",
+    "chrono-node": "^2.10.1",
+    "libqalculate-wasm": "^0.0.6",
     "lucide-solid": "^1.41.0",
+    "mathjs": "^15.2.0",
     "solid-js": "^1.9.15"
   },
   "devDependencies": {

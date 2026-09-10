@@ -1,6 +1,12 @@
-import { createSignal, createMemo, For, Show } from 'solid-js';
+import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
 import { themeConfig, updateThemePreferences } from '../theme/materialTheme';
 import { navigate } from '../utils/router';
+import {
+  formatDurationHuman,
+  parseFastSyncDuration,
+  parseSmartDurationAsync,
+  type ParsedDuration,
+} from '../utils/timeParser';
 import {
   Timer,
   Calendar,
@@ -13,7 +19,6 @@ import {
   Palette,
   Sun,
   Moon,
-  Info,
   Sliders,
   Zap,
   ZapOff,
@@ -35,10 +40,37 @@ const PRESET_COLORS = [
 export function CreatorLandingView() {
   const [mode, setMode] = createSignal<TimerMode>('duration');
 
-  // Duration fields (asks only about duration)
-  const [hours, setHours] = createSignal<number>(0);
-  const [minutes, setMinutes] = createSignal<number>(5);
-  const [seconds, setSeconds] = createSignal<number>(0);
+  // Smart duration text input
+  const [durationInput, setDurationInput] = createSignal<string>('5m');
+  const [parsedDuration, setParsedDuration] = createSignal<ParsedDuration>({
+    input: '5m',
+    totalSeconds: 300,
+    formatted: '5m 00s (300s)',
+    isValid: true,
+    engine: 'Smart Parser',
+  });
+
+  // Reactive parsing effect with fast sync response + async Qalculate engine
+  createEffect(() => {
+    const input = durationInput();
+    const syncSec = parseFastSyncDuration(input);
+    if (syncSec !== null && syncSec > 0) {
+      setParsedDuration({
+        input,
+        totalSeconds: syncSec,
+        formatted: formatDurationHuman(syncSec),
+        isValid: true,
+        engine: 'Smart Parser',
+      });
+    }
+
+    // Async Qalculate WASM evaluation
+    parseSmartDurationAsync(input).then((res) => {
+      if (durationInput() === input) {
+        setParsedDuration(res);
+      }
+    });
+  });
 
   // End Time field (ISO local string)
   const defaultEndTime = () => {
@@ -58,10 +90,8 @@ export function CreatorLandingView() {
   const [copied, setCopied] = createSignal<boolean>(false);
 
   // Quick duration presets
-  const applyPresetDuration = (h: number, m: number, s: number) => {
-    setHours(h);
-    setMinutes(m);
-    setSeconds(s);
+  const applyPresetDuration = (val: string) => {
+    setDurationInput(val);
   };
 
   // Quick end-time shortcuts
@@ -80,8 +110,8 @@ export function CreatorLandingView() {
 
   // Duration in seconds
   const totalDurationSeconds = createMemo(() => {
-    const total = hours() * 3600 + minutes() * 60 + seconds();
-    return total > 0 ? total : 300;
+    const p = parsedDuration();
+    return p.isValid && p.totalSeconds > 0 ? p.totalSeconds : 300;
   });
 
   // Build the launch URL with automatic startTime upon launch
@@ -193,7 +223,7 @@ export function CreatorLandingView() {
                 }`}
               >
                 <Timer class="w-4 h-4" />
-                <span>Timer Duration</span>
+                <span>Duration</span>
               </button>
 
               <button
@@ -206,7 +236,7 @@ export function CreatorLandingView() {
                 }`}
               >
                 <Calendar class="w-4 h-4" />
-                <span>Target Date / Time</span>
+                <span>Countdown</span>
               </button>
             </div>
           </div>
@@ -214,90 +244,113 @@ export function CreatorLandingView() {
           {/* Mode Configuration Form */}
           <div class="space-y-6">
             <Show when={mode() === 'duration'}>
-              <div>
-                <label class="block text-sm font-semibold text-on-surface mb-2">
-                  Duration
-                </label>
-                
-                {/* Duration Inputs: H, M, S */}
-                <div class="grid grid-cols-3 gap-3">
-                  <div class="flex flex-col">
-                    <label class="text-xs text-on-surface-variant mb-1 font-mono">Hours</label>
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-sm font-semibold text-on-surface mb-2">
+                    Duration
+                  </label>
+                  <div class="relative">
                     <input
-                      type="number"
-                      min="0"
-                      max="999"
-                      value={hours()}
-                      onInput={(e) => setHours(Math.max(0, parseInt(e.currentTarget.value, 10) || 0))}
-                      class="w-full bg-surface-container border border-outline-variant rounded-xl px-4 py-3 text-xl font-mono text-center font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  <div class="flex flex-col">
-                    <label class="text-xs text-on-surface-variant mb-1 font-mono">Minutes</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={minutes()}
-                      onInput={(e) => setMinutes(Math.max(0, parseInt(e.currentTarget.value, 10) || 0))}
-                      class="w-full bg-surface-container border border-outline-variant rounded-xl px-4 py-3 text-xl font-mono text-center font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  <div class="flex flex-col">
-                    <label class="text-xs text-on-surface-variant mb-1 font-mono">Seconds</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={seconds()}
-                      onInput={(e) => setSeconds(Math.max(0, parseInt(e.currentTarget.value, 10) || 0))}
-                      class="w-full bg-surface-container border border-outline-variant rounded-xl px-4 py-3 text-xl font-mono text-center font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                      type="text"
+                      value={durationInput()}
+                      onInput={(e) => setDurationInput(e.currentTarget.value)}
+                      placeholder="e.g. 30m, 30:00, 08:00-03:00, 1h - 15m"
+                      class="w-full bg-surface-container border border-outline-variant rounded-xl px-4 py-3 text-lg font-mono font-semibold text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
                 </div>
 
+                {/* Live Parsed Preview Badge */}
+                <div
+                  class={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-mono transition-colors ${
+                    parsedDuration().isValid
+                      ? 'bg-primary/10 text-primary border border-primary/20'
+                      : 'bg-error/10 text-error border border-error/20'
+                  }`}
+                >
+                  <div class="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
+                    {parsedDuration().isValid ? (
+                      <Check class="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <span class="font-bold shrink-0">!</span>
+                    )}
+                    <span class="truncate">
+                      {parsedDuration().isValid ? parsedDuration().formatted : (parsedDuration().error || parsedDuration().formatted)}
+                    </span>
+                  </div>
+                  <Show when={parsedDuration().isValid && parsedDuration().engine}>
+                    <span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-primary/20 shrink-0 ml-2">
+                      {parsedDuration().engine}
+                    </span>
+                  </Show>
+                </div>
+
                 {/* Quick Preset Chips */}
-                <div class="flex flex-wrap gap-2 mt-4">
+                <div class="flex flex-wrap gap-2 pt-1">
                   <span class="text-xs text-on-surface-variant self-center mr-1">Presets:</span>
                   <button
                     type="button"
-                    onClick={() => applyPresetDuration(0, 1, 0)}
-                    class="px-3 py-1 text-xs rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface transition cursor-pointer"
+                    onClick={() => applyPresetDuration('1m')}
+                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
+                      durationInput() === '1m'
+                        ? 'bg-primary text-on-primary font-semibold'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                    }`}
                   >
                     1m
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyPresetDuration(0, 5, 0)}
-                    class="px-3 py-1 text-xs rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface transition cursor-pointer"
+                    onClick={() => applyPresetDuration('5m')}
+                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
+                      durationInput() === '5m'
+                        ? 'bg-primary text-on-primary font-semibold'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                    }`}
                   >
                     5m
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyPresetDuration(0, 15, 0)}
-                    class="px-3 py-1 text-xs rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface transition cursor-pointer"
+                    onClick={() => applyPresetDuration('15m')}
+                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
+                      durationInput() === '15m'
+                        ? 'bg-primary text-on-primary font-semibold'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                    }`}
                   >
                     15m
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyPresetDuration(0, 25, 0)}
-                    class="px-3 py-1 text-xs rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant text-primary font-semibold transition cursor-pointer"
+                    onClick={() => applyPresetDuration('25m')}
+                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
+                      durationInput() === '25m'
+                        ? 'bg-primary text-on-primary font-semibold'
+                        : 'bg-surface-container hover:bg-surface-container-high text-primary font-semibold'
+                    }`}
                   >
                     25m Pomodoro
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyPresetDuration(0, 45, 0)}
-                    class="px-3 py-1 text-xs rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface transition cursor-pointer"
+                    onClick={() => applyPresetDuration('45m')}
+                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
+                      durationInput() === '45m'
+                        ? 'bg-primary text-on-primary font-semibold'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                    }`}
                   >
                     45m
                   </button>
                   <button
                     type="button"
-                    onClick={() => applyPresetDuration(1, 0, 0)}
-                    class="px-3 py-1 text-xs rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface transition cursor-pointer"
+                    onClick={() => applyPresetDuration('1h')}
+                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
+                      durationInput() === '1h'
+                        ? 'bg-primary text-on-primary font-semibold'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                    }`}
                   >
                     1h
                   </button>
@@ -422,20 +475,22 @@ export function CreatorLandingView() {
               <label class="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
                 Shareable URL Preview
               </label>
-              <div class="flex items-center gap-2">
+              <div class="relative flex items-center">
                 <input
                   type="text"
                   readonly
                   value={fullPreviewUrl()}
-                  class="flex-1 bg-surface-container font-mono text-xs text-on-surface-variant px-4 py-3 rounded-xl border border-outline-variant select-all overflow-ellipsis"
+                  onClick={(e) => e.currentTarget.select()}
+                  class="w-full bg-surface-container font-mono text-xs text-on-surface-variant pl-4 pr-11 py-3 rounded-xl border border-outline-variant select-all overflow-ellipsis cursor-text focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 <button
                   type="button"
                   onClick={handleCopyLink}
-                  class="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface font-medium text-sm transition cursor-pointer shrink-0"
+                  title={copied() ? 'Copied to clipboard!' : 'Copy to clipboard'}
+                  aria-label="Copy URL"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:scale-95 transition cursor-pointer"
                 >
                   {copied() ? <Check class="w-4 h-4 text-primary" /> : <Copy class="w-4 h-4" />}
-                  <span>{copied() ? 'Copied' : 'Copy'}</span>
                 </button>
               </div>
             </div>
@@ -456,17 +511,14 @@ export function CreatorLandingView() {
         <section class="bg-surface rounded-3xl border border-outline-variant p-6 sm:p-8 space-y-6">
           <div class="flex items-center gap-2 text-primary">
             <Palette class="w-5 h-5" />
-            <h2 class="font-bold text-lg text-on-surface">Material Design Color Theme</h2>
+            <h2 class="font-bold text-lg text-on-surface">Themes</h2>
           </div>
-          <p class="text-xs text-on-surface-variant">
-            Dynamic Material color schemes generated using Google's Material Color Utilities and saved to your device.
-          </p>
 
           <div class="space-y-4">
             {/* Color Presets */}
             <div>
               <label class="block text-xs font-semibold text-on-surface-variant mb-2">
-                Theme Seed Color
+                Accent color
               </label>
               <div class="flex flex-wrap items-center gap-3">
                 <For each={PRESET_COLORS}>
@@ -556,24 +608,6 @@ export function CreatorLandingView() {
             </div>
           </div>
         </section>
-
-        {/* Documentation / Manual Hash Parameters Guide */}
-        <footer class="bg-surface/50 rounded-2xl border border-outline-variant/60 p-5 text-xs text-on-surface-variant space-y-2">
-          <div class="flex items-center gap-2 text-on-surface font-semibold">
-            <Info class="w-4 h-4 text-primary" />
-            <span>Direct Hash Parameters</span>
-          </div>
-          <p>
-            You can customize or share countdowns directly in your browser's address bar:
-          </p>
-          <ul class="list-disc pl-5 space-y-1 font-mono text-[11px]">
-            <li><code>/countdown#duration=10m</code> - Start 10-minute countdown relative to page load</li>
-            <li><code>/countdown#duration=1h30m&sound=true</code> - 90-minute timer with audio chime on finish</li>
-            <li><code>/countdown#duration=5m&animate=false</code> - Static digital display without rolling animation</li>
-            <li><code>/countdown#endTime=2026-12-31T23:59:59Z</code> - Countdown to specific UTC ISO date</li>
-            <li><code>/countdown#startTime=...&duration=45m</code> - Scheduled window countdown</li>
-          </ul>
-        </footer>
 
       </div>
     </div>

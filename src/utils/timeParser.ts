@@ -1,3 +1,143 @@
+import * as chrono from 'chrono-node';
+import { create, all } from 'mathjs';
+import { evaluateWithQalculate, normalizeDurationExpression } from './qalculateEngine';
+
+const math = create(all);
+
+export interface ParsedDuration {
+  input: string;
+  totalSeconds: number;
+  formatted: string;
+  isValid: boolean;
+  error?: string;
+  engine?: string;
+}
+
+/**
+ * Formats seconds into a clean, human-readable breakdown and clock format.
+ * e.g. "5h 00m 00s (05:00:00)" or "5m 00s (00:05:00)"
+ */
+export function formatDurationHuman(totalSeconds: number): string {
+  if (totalSeconds <= 0) return '0s (00:00:00)';
+
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const pad = (n: number) => n.toString().padStart(2, '0');
+
+  let breakdown = '';
+  let clock = '';
+
+  if (days > 0) {
+    breakdown = `${days}d ${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
+    clock = `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  } else if (hours > 0) {
+    breakdown = `${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
+    clock = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  } else {
+    breakdown = `${minutes}m ${pad(seconds)}s`;
+    clock = `00:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  return `${breakdown} (${clock})`;
+}
+
+/**
+ * Fast synchronous parser using chrono-node, mathjs, and pattern normalization.
+ */
+export function parseFastSyncDuration(input: string): number | null {
+  const raw = input.trim();
+  if (!raw) return null;
+
+  // 1. Try Chrono for natural language date/time ranges (e.g. "8am to 5pm", "8:00 to 17:30")
+  try {
+    const chronoResults = chrono.parse(raw);
+    if (chronoResults.length > 0 && chronoResults[0].end) {
+      const start = chronoResults[0].start.date();
+      const end = chronoResults[0].end.date();
+      const diffSec = Math.abs(Math.floor((end.getTime() - start.getTime()) / 1000));
+      if (diffSec > 0) {
+        return diffSec;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2. Normalize expressions with duration-aware preprocessor
+  const expr = normalizeDurationExpression(raw);
+
+  // Evaluate with mathjs
+  try {
+    const result = math.evaluate(expr);
+    if (result && typeof result === 'object' && 'isUnit' in result) {
+      const sec = Math.abs(Math.round((result as any).toNumber('second')));
+      if (!isNaN(sec) && sec >= 0) return sec;
+    } else if (typeof result === 'number') {
+      const sec = Math.abs(Math.round(result));
+      if (!isNaN(sec) && sec >= 0) return sec;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Fallback to basic duration regex
+  return parseDurationToSeconds(input);
+}
+
+/**
+ * Parses duration intelligently using Qalculate WASM with fast fallback.
+ */
+export async function parseSmartDurationAsync(input: string): Promise<ParsedDuration> {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return {
+      input,
+      totalSeconds: 0,
+      formatted: 'Enter a duration (e.g., 30m, 30:00, 08:00-03:00)',
+      isValid: false,
+    };
+  }
+
+  // Try Qalculate! WASM first
+  try {
+    const qalcSec = await evaluateWithQalculate(trimmed);
+    if (qalcSec !== null && qalcSec > 0) {
+      return {
+        input,
+        totalSeconds: qalcSec,
+        formatted: formatDurationHuman(qalcSec),
+        isValid: true,
+        engine: 'Qalculate!',
+      };
+    }
+  } catch {
+    // fallback
+  }
+
+  // Fallback to fast multi-engine parser
+  const fallbackSec = parseFastSyncDuration(trimmed);
+  if (fallbackSec !== null && fallbackSec > 0) {
+    return {
+      input,
+      totalSeconds: fallbackSec,
+      formatted: formatDurationHuman(fallbackSec),
+      isValid: true,
+      engine: 'Smart Parser',
+    };
+  }
+
+  return {
+    input,
+    totalSeconds: 0,
+    formatted: 'Invalid duration expression',
+    isValid: false,
+    error: 'Could not parse duration',
+  };
+}
+
 /**
  * Parses duration string or number into total seconds.
  * Supports: "300", "300s", "5m", "1h", "1h30m", "1d2h30m45s", "90s", "PT5M"
@@ -37,7 +177,6 @@ export function parseDateToMs(input: string | number | null | undefined): number
   // Numeric epoch timestamp (seconds or milliseconds)
   if (/^\d+$/.test(str)) {
     const num = parseInt(str, 10);
-    // If 10 digits, it's seconds; if 13 digits, milliseconds
     return str.length <= 10 ? num * 1000 : num;
   }
 
