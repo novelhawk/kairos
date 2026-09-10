@@ -255,17 +255,6 @@ export function CreatorLandingView() {
                   <span class="text-xs text-on-surface-variant self-center mr-1">Presets:</span>
                   <button
                     type="button"
-                    onClick={() => applyPresetDuration('1m')}
-                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
-                      durationInput() === '1m'
-                        ? 'bg-primary text-on-primary font-semibold'
-                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
-                    }`}
-                  >
-                    1m
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => applyPresetDuration('5m')}
                     class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
                       durationInput() === '5m'
@@ -292,10 +281,21 @@ export function CreatorLandingView() {
                     class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
                       durationInput() === '25m'
                         ? 'bg-primary text-on-primary font-semibold'
-                        : 'bg-surface-container hover:bg-surface-container-high text-primary font-semibold'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
                     }`}
                   >
-                    25m Pomodoro
+                    25m
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPresetDuration('30m')}
+                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
+                      durationInput() === '30m'
+                        ? 'bg-primary text-on-primary font-semibold'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                    }`}
+                  >
+                    30m
                   </button>
                   <button
                     type="button"
