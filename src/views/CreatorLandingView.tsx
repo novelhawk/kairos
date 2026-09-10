@@ -1,10 +1,8 @@
-import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
+import { createSignal, createMemo, For, Show } from 'solid-js';
 import { themeConfig, updateThemePreferences } from '../theme/materialTheme';
 import { navigate } from '../utils/router';
 import {
-  formatDurationHuman,
-  parseFastSyncDuration,
-  parseSmartDurationAsync,
+  parseSmartDuration,
   type ParsedDuration,
 } from '../utils/timeParser';
 import {
@@ -42,35 +40,7 @@ export function CreatorLandingView() {
 
   // Smart duration text input
   const [durationInput, setDurationInput] = createSignal<string>('5m');
-  const [parsedDuration, setParsedDuration] = createSignal<ParsedDuration>({
-    input: '5m',
-    totalSeconds: 300,
-    formatted: '5m 00s (300s)',
-    isValid: true,
-    engine: 'Smart Parser',
-  });
-
-  // Reactive parsing effect with fast sync response + async Qalculate engine
-  createEffect(() => {
-    const input = durationInput();
-    const syncSec = parseFastSyncDuration(input);
-    if (syncSec !== null && syncSec > 0) {
-      setParsedDuration({
-        input,
-        totalSeconds: syncSec,
-        formatted: formatDurationHuman(syncSec),
-        isValid: true,
-        engine: 'Smart Parser',
-      });
-    }
-
-    // Async Qalculate WASM evaluation
-    parseSmartDurationAsync(input).then((res) => {
-      if (durationInput() === input) {
-        setParsedDuration(res);
-      }
-    });
-  });
+  const parsedDuration = createMemo<ParsedDuration>(() => parseSmartDuration(durationInput()));
 
   // End Time field (ISO local string)
   const defaultEndTime = () => {
@@ -254,7 +224,7 @@ export function CreatorLandingView() {
                       type="text"
                       value={durationInput()}
                       onInput={(e) => setDurationInput(e.currentTarget.value)}
-                      placeholder="e.g. 30m, 30:00, 08:00-03:00, 1h - 15m"
+                      placeholder="e.g. 08:00-00:30-00:20, 01:00, 1h - 15m, 30m"
                       class="w-full bg-surface-container border border-outline-variant rounded-xl px-4 py-3 text-lg font-mono font-semibold text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -278,11 +248,6 @@ export function CreatorLandingView() {
                       {parsedDuration().isValid ? parsedDuration().formatted : (parsedDuration().error || parsedDuration().formatted)}
                     </span>
                   </div>
-                  <Show when={parsedDuration().isValid && parsedDuration().engine}>
-                    <span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-primary/20 shrink-0 ml-2">
-                      {parsedDuration().engine}
-                    </span>
-                  </Show>
                 </div>
 
                 {/* Quick Preset Chips */}
