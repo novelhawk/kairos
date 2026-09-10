@@ -1,3 +1,20 @@
+import {
+  Parser,
+  result,
+  char,
+  stringCI,
+  altMany,
+  many,
+  chainl1,
+  token,
+  symbol,
+  nat,
+  digits,
+  decimal,
+  spaces,
+  isDigit,
+} from './monadicParser.ts';
+
 export interface ParsedDuration {
   input: string;
   totalSeconds: number;
@@ -6,304 +23,137 @@ export interface ParsedDuration {
   error?: string;
 }
 
-export type TokenType =
-  | 'TIME_VALUE'
-  | 'NUMBER'
-  | 'PLUS'
-  | 'MINUS'
-  | 'STAR'
-  | 'SLASH'
-  | 'LPAREN'
-  | 'RPAREN'
-  | 'EOF';
-
-export interface Token {
-  type: TokenType;
-  value: number;
-  pos: number;
-}
-
-function isDigit(ch: string): boolean {
-  return ch >= '0' && ch <= '9';
-}
-
-function isAlpha(ch: string): boolean {
-  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
-}
-
-function isWhitespace(ch: string): boolean {
-  return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
-}
+// ---------------------------------------------------------------------------
+// Monadic Duration Grammar
+// ---------------------------------------------------------------------------
 
 /**
- * Character-by-character scanner (Lexer) for duration math expressions.
- * Converts characters into structured tokens without regexes.
+ * Parses colon time format (HH:MM or HH:MM:SS)
+ * e.g. "08:00" -> 28,800s, "00:30" -> 1,800s, "01:30:00" -> 5,400s
  */
-export function tokenizeDuration(input: string): { tokens: Token[]; error?: string } {
-  const tokens: Token[] = [];
-  let i = 0;
-  const n = input.length;
+const timeColon: Parser<number> = nat.bind((h) =>
+  char(':').bind(() =>
+    digits.bind((mStr) => {
+      const m = parseInt(mStr, 10);
+      return char(':')
+        .bind(() =>
+          digits.bind((sStr) => {
+            const s = parseInt(sStr, 10);
+            return result(h * 3600 + m * 60 + s);
+          })
+        )
+        .alt(result(h * 3600 + m * 60));
+    })
+  )
+);
 
-  while (i < n) {
-    const ch = input[i];
+// Suffix units
+const dayUnit: Parser<number> = altMany([
+  stringCI('days'),
+  stringCI('day'),
+  stringCI('d'),
+]).map(() => 86400);
 
-    if (isWhitespace(ch)) {
-      i++;
-      continue;
-    }
+const hourUnit: Parser<number> = altMany([
+  stringCI('hours'),
+  stringCI('hour'),
+  stringCI('hrs'),
+  stringCI('hr'),
+  stringCI('h'),
+]).map(() => 3600);
 
-    const startPos = i;
+const minuteUnit: Parser<number> = altMany([
+  stringCI('minutes'),
+  stringCI('minute'),
+  stringCI('mins'),
+  stringCI('min'),
+  stringCI('m'),
+]).map(() => 60);
 
-    if (ch === '+') {
-      tokens.push({ type: 'PLUS', value: 0, pos: startPos });
-      i++;
-      continue;
-    }
-    if (ch === '-') {
-      tokens.push({ type: 'MINUS', value: 0, pos: startPos });
-      i++;
-      continue;
-    }
-    if (ch === '*' || ch === 'x' || ch === 'X') {
-      tokens.push({ type: 'STAR', value: 0, pos: startPos });
-      i++;
-      continue;
-    }
-    if (ch === '/') {
-      tokens.push({ type: 'SLASH', value: 0, pos: startPos });
-      i++;
-      continue;
-    }
-    if (ch === '(') {
-      tokens.push({ type: 'LPAREN', value: 0, pos: startPos });
-      i++;
-      continue;
-    }
-    if (ch === ')') {
-      tokens.push({ type: 'RPAREN', value: 0, pos: startPos });
-      i++;
-      continue;
-    }
+const secondUnit: Parser<number> = altMany([
+  stringCI('seconds'),
+  stringCI('second'),
+  stringCI('secs'),
+  stringCI('sec'),
+  stringCI('s'),
+]).map(() => 1);
 
-    // Number or decimal digit
-    if (isDigit(ch) || (ch === '.' && i + 1 < n && isDigit(input[i + 1]))) {
-      let numStr = '';
-      while (i < n && (isDigit(input[i]) || input[i] === '.')) {
-        if (input[i] === '.' && numStr.includes('.')) break;
-        numStr += input[i];
-        i++;
-      }
-
-      // Check if followed by colon ':'
-      if (i < n && input[i] === ':') {
-        i++; // skip ':'
-        let minStr = '';
-        while (i < n && isDigit(input[i])) {
-          minStr += input[i];
-          i++;
-        }
-        if (minStr.length === 0) {
-          return { tokens: [], error: `Expected digits after ':' at position ${i + 1}` };
-        }
-
-        // Check if followed by second colon ':' (HH:MM:SS)
-        if (i < n && input[i] === ':') {
-          i++; // skip second ':'
-          let secStr = '';
-          while (i < n && isDigit(input[i])) {
-            secStr += input[i];
-            i++;
-          }
-          if (secStr.length === 0) {
-            return { tokens: [], error: `Expected digits after second ':' at position ${i + 1}` };
-          }
-
-          const hours = parseFloat(numStr);
-          const minutes = parseFloat(minStr);
-          const seconds = parseFloat(secStr);
-          const totalSec = hours * 3600 + minutes * 60 + seconds;
-          tokens.push({ type: 'TIME_VALUE', value: totalSec, pos: startPos });
-          continue;
-        } else {
-          // HH:MM format
-          const hours = parseFloat(numStr);
-          const minutes = parseFloat(minStr);
-          const totalSec = hours * 3600 + minutes * 60;
-          tokens.push({ type: 'TIME_VALUE', value: totalSec, pos: startPos });
-          continue;
-        }
-      }
-
-      // Check for unit suffix (e.g. 1h, 30m, 45s, 1.5hours)
-      let unitCheckPos = i;
-      while (unitCheckPos < n && isWhitespace(input[unitCheckPos])) {
-        unitCheckPos++;
-      }
-
-      if (unitCheckPos < n && isAlpha(input[unitCheckPos])) {
-        let unitStr = '';
-        i = unitCheckPos;
-        while (i < n && isAlpha(input[i])) {
-          unitStr += input[i].toLowerCase();
-          i++;
-        }
-
-        const numVal = parseFloat(numStr);
-        let multiplier: number | null = null;
-
-        if (unitStr === 's' || unitStr === 'sec' || unitStr === 'secs' || unitStr === 'second' || unitStr === 'seconds') {
-          multiplier = 1;
-        } else if (unitStr === 'm' || unitStr === 'min' || unitStr === 'mins' || unitStr === 'minute' || unitStr === 'minutes') {
-          multiplier = 60;
-        } else if (unitStr === 'h' || unitStr === 'hr' || unitStr === 'hrs' || unitStr === 'hour' || unitStr === 'hours') {
-          multiplier = 3600;
-        } else if (unitStr === 'd' || unitStr === 'day' || unitStr === 'days') {
-          multiplier = 86400;
-        }
-
-        if (multiplier !== null) {
-          tokens.push({ type: 'TIME_VALUE', value: numVal * multiplier, pos: startPos });
-          continue;
-        } else {
-          return { tokens: [], error: `Unknown unit '${unitStr}' at position ${unitCheckPos + 1}` };
-        }
-      }
-
-      // Pure numeric scalar
-      const numVal = parseFloat(numStr);
-      tokens.push({ type: 'NUMBER', value: numVal, pos: startPos });
-      continue;
-    }
-
-    return { tokens: [], error: `Unexpected character '${ch}' at position ${i + 1}` };
-  }
-
-  tokens.push({ type: 'EOF', value: 0, pos: i });
-  return { tokens };
-}
+const unitSuffix: Parser<number> = altMany([
+  secondUnit,
+  minuteUnit,
+  hourUnit,
+  dayUnit,
+]);
 
 /**
- * Recursive Descent Parser & Evaluator for mathematical duration expressions.
+ * Parses a number followed by a duration unit (e.g. "1.5h", "30 mins", "45s")
  */
-export function evaluateDurationTokens(tokens: Token[]): { result?: number; error?: string } {
-  let idx = 0;
-
-  function current(): Token {
-    return tokens[idx] || { type: 'EOF', value: 0, pos: 0 };
-  }
-
-  function advance(): Token {
-    const t = current();
-    idx++;
-    return t;
-  }
-
-  function parsePrimary(): number {
-    const tok = current();
-
-    // Unary plus
-    if (tok.type === 'PLUS') {
-      advance();
-      return parsePrimary();
-    }
-
-    // Unary minus
-    if (tok.type === 'MINUS') {
-      advance();
-      return -parsePrimary();
-    }
-
-    // Parentheses
-    if (tok.type === 'LPAREN') {
-      advance();
-      const val = parseExpression();
-      if (current().type !== 'RPAREN') {
-        throw new Error("Expected closing parenthesis ')'");
-      }
-      advance();
-      return val;
-    }
-
-    // Time value (including composite consecutive time values like "1h 30m 15s")
-    if (tok.type === 'TIME_VALUE') {
-      let total = advance().value;
-      while (current().type === 'TIME_VALUE') {
-        total += advance().value;
-      }
-      return total;
-    }
-
-    // Scalar number
-    if (tok.type === 'NUMBER') {
-      return advance().value;
-    }
-
-    throw new Error(`Unexpected token '${tok.type}' at position ${tok.pos + 1}`);
-  }
-
-  function parseTerm(): number {
-    let left = parsePrimary();
-
-    while (current().type === 'STAR' || current().type === 'SLASH') {
-      const op = current().type;
-      advance();
-      const right = parsePrimary();
-
-      if (op === 'STAR') {
-        left = left * right;
-      } else {
-        if (right === 0) {
-          throw new Error('Division by zero');
-        }
-        left = left / right;
-      }
-    }
-
-    return left;
-  }
-
-  function parseExpression(): number {
-    let left = parseTerm();
-
-    while (current().type === 'PLUS' || current().type === 'MINUS') {
-      const op = current().type;
-      advance();
-      const right = parseTerm();
-
-      if (op === 'PLUS') {
-        left = left + right;
-      } else {
-        left = left - right;
-      }
-    }
-
-    return left;
-  }
-
-  try {
-    if (tokens.length === 0 || (tokens.length === 1 && tokens[0].type === 'EOF')) {
-      throw new Error('Empty expression');
-    }
-
-    const res = parseExpression();
-
-    if (current().type !== 'EOF') {
-      throw new Error(`Unexpected trailing input at position ${current().pos + 1}`);
-    }
-
-    if (isNaN(res) || !isFinite(res)) {
-      throw new Error('Invalid calculation result');
-    }
-
-    return { result: res };
-  } catch (err: any) {
-    return { error: err?.message || 'Invalid syntax' };
-  }
-}
+const timeSuffixed: Parser<number> = decimal.bind((num) =>
+  spaces.bind(() =>
+    unitSuffix.bind((mult) =>
+      result(num * mult)
+    )
+  )
+);
 
 /**
- * Formats seconds into clean structured breakdown and clock format.
- * e.g. "7h 10m 00s (07:10:00)" or "30m 00s (00:30:00)"
+ * Single duration item (either colon notation or suffixed duration)
+ */
+const singleDuration: Parser<number> = timeColon.alt(timeSuffixed);
+
+/**
+ * Compound duration sequence without operators (e.g. "1h 30m 15s")
+ */
+const compoundDuration: Parser<number> = singleDuration.bind((first) =>
+  many(spaces.bind(() => singleDuration)).bind((rest) =>
+    result(rest.reduce((acc, v) => acc + v, first))
+  )
+);
+
+// Arithmetic operator combinators
+const addOp: Parser<(a: number, b: number) => number> = symbol('+')
+  .map(() => (a: number, b: number) => a + b)
+  .alt(
+    symbol('-').map(() => (a: number, b: number) => a - b)
+  );
+
+const mulOp: Parser<(a: number, b: number) => number> = symbol('*')
+  .alt(symbol('x'))
+  .alt(symbol('X'))
+  .map(() => (a: number, b: number) => a * b)
+  .alt(
+    symbol('/').map(() => (a: number, b: number) => {
+      if (b === 0) throw new Error('Division by zero');
+      return a / b;
+    })
+  );
+
+// Mutually recursive grammar using Parser delegation
+const factor: Parser<number> = new Parser((inp) => {
+  const parenExpr = symbol('(').bind(() =>
+    expr.bind((val) =>
+      symbol(')').bind(() =>
+        result(val)
+      )
+    )
+  );
+  return parenExpr
+    .alt(token(compoundDuration))
+    .alt(token(decimal))
+    .run(inp);
+});
+
+const term: Parser<number> = chainl1(factor, mulOp);
+
+export const expr: Parser<number> = chainl1(term, addOp);
+
+// ---------------------------------------------------------------------------
+// Human Formatting & Helper Utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Formats seconds into a clean structured breakdown and clock format.
+ * e.g. "7h 10m 00s (07:10:00)" or "30m 00s (00:30:00)" or "45s (00:00:45)"
  */
 export function formatDurationHuman(totalSeconds: number): string {
   if (totalSeconds <= 0) return '0s (00:00:00)';
@@ -336,7 +186,7 @@ export function formatDurationHuman(totalSeconds: number): string {
 }
 
 /**
- * Evaluates duration expression using Tokenizer and Recursive Descent Parser.
+ * Evaluates duration expression using the Monadic Parser.
  */
 export function parseSmartDuration(input: string): ParsedDuration {
   const trimmed = input.trim();
@@ -349,45 +199,65 @@ export function parseSmartDuration(input: string): ParsedDuration {
     };
   }
 
-  const { tokens, error: tokenError } = tokenizeDuration(trimmed);
-  if (tokenError) {
+  try {
+    const results = token(expr).run(trimmed);
+    if (results.length === 0) {
+      return {
+        input,
+        totalSeconds: 0,
+        formatted: 'Invalid syntax',
+        isValid: false,
+        error: 'Invalid syntax',
+      };
+    }
+
+    const [val, rest] = results[0];
+    if (rest.trim().length > 0) {
+      return {
+        input,
+        totalSeconds: 0,
+        formatted: `Unexpected trailing input: "${rest.trim()}"`,
+        isValid: false,
+        error: `Unexpected trailing input: "${rest.trim()}"`,
+      };
+    }
+
+    if (isNaN(val) || !isFinite(val)) {
+      return {
+        input,
+        totalSeconds: 0,
+        formatted: 'Invalid calculation result',
+        isValid: false,
+        error: 'Invalid calculation result',
+      };
+    }
+
+    if (val < 0) {
+      return {
+        input,
+        totalSeconds: 0,
+        formatted: 'Duration cannot be negative',
+        isValid: false,
+        error: 'Duration cannot be negative',
+      };
+    }
+
+    const rounded = Math.round(val);
+    return {
+      input,
+      totalSeconds: rounded,
+      formatted: formatDurationHuman(rounded),
+      isValid: true,
+    };
+  } catch (err: any) {
     return {
       input,
       totalSeconds: 0,
-      formatted: tokenError,
+      formatted: err?.message || 'Calculation error',
       isValid: false,
-      error: tokenError,
+      error: err?.message || 'Calculation error',
     };
   }
-
-  const { result, error: parseError } = evaluateDurationTokens(tokens);
-  if (parseError || result === undefined) {
-    return {
-      input,
-      totalSeconds: 0,
-      formatted: parseError || 'Invalid expression',
-      isValid: false,
-      error: parseError || 'Invalid expression',
-    };
-  }
-
-  if (result < 0) {
-    return {
-      input,
-      totalSeconds: 0,
-      formatted: 'Duration cannot be negative',
-      isValid: false,
-      error: 'Duration cannot be negative',
-    };
-  }
-
-  const rounded = Math.round(result);
-  return {
-    input,
-    totalSeconds: rounded,
-    formatted: formatDurationHuman(rounded),
-    isValid: true,
-  };
 }
 
 /**
