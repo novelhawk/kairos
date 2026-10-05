@@ -77,7 +77,7 @@ export function CreatorLandingView() {
   // Duration in seconds
   const totalDurationSeconds = createMemo(() => {
     const p = parsedDuration();
-    return p.isValid && p.totalSeconds > 0 ? p.totalSeconds : 300;
+    return p.isValid ? p.totalSeconds : 0;
   });
 
   // Build the launch URL with automatic startTime upon launch
