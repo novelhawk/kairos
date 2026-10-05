@@ -152,37 +152,35 @@ export const expr: Parser<number> = chainl1(term, addOp);
 // ---------------------------------------------------------------------------
 
 /**
- * Formats seconds into a clean structured breakdown and clock format.
- * e.g. "7h 10m 00s (07:10:00)" or "30m 00s (00:30:00)" or "45s (00:00:45)"
+ * Formats seconds into a clean structured breakdown.
+ * e.g. "7h 10m" or "30m" or "45s" or "1d 2h 15m"
  */
 export function formatDurationHuman(totalSeconds: number): string {
-  if (totalSeconds <= 0) return '0s (00:00:00)';
+  if (totalSeconds <= 0) return '0s';
 
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = Math.floor(totalSeconds % 60);
 
-  const pad = (n: number) => n.toString().padStart(2, '0');
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
 
-  let breakdown = '';
-  let clock = '';
+  return parts.join(' ');
+}
 
-  if (days > 0) {
-    breakdown = `${days}d ${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
-    clock = `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-  } else if (hours > 0) {
-    breakdown = `${hours}h ${pad(minutes)}m ${pad(seconds)}s`;
-    clock = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-  } else if (minutes > 0) {
-    breakdown = `${minutes}m ${pad(seconds)}s`;
-    clock = `00:${pad(minutes)}:${pad(seconds)}`;
-  } else {
-    breakdown = `${seconds}s`;
-    clock = `00:00:${pad(seconds)}`;
-  }
-
-  return `${breakdown} (${clock})`;
+/**
+ * Adds seconds to the current duration input string and returns a formatted duration.
+ * If the current duration is invalid or 0, it starts from 0 seconds.
+ */
+export function addSecondsToDuration(currentInput: string, secondsToAdd: number): string {
+  const parsed = parseSmartDuration(currentInput);
+  const baseSeconds = parsed.isValid ? Math.max(0, parsed.totalSeconds) : 0;
+  const newSeconds = Math.max(0, baseSeconds + secondsToAdd);
+  return formatDurationHuman(newSeconds);
 }
 
 /**
@@ -194,8 +192,8 @@ export function parseSmartDuration(input: string): ParsedDuration {
     return {
       input,
       totalSeconds: 0,
-      formatted: 'Enter a duration (e.g., 08:00-00:30, 01:00, 1h - 15m)',
-      isValid: false,
+      formatted: '0s',
+      isValid: true,
     };
   }
 
