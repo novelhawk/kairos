@@ -10,7 +10,6 @@ import {
   Calendar,
   Volume2,
   VolumeX,
-  Sparkles,
   Copy,
   Check,
   Play,
@@ -22,7 +21,7 @@ import {
   ZapOff,
 } from 'lucide-solid';
 
-type TimerMode = 'duration' | 'endTime';
+type Mode = 'timer' | 'countdown';
 
 const PRESET_COLORS = [
   { name: 'Amber', hex: '#FF8811' },
@@ -36,7 +35,7 @@ const PRESET_COLORS = [
 ];
 
 export function CreatorLandingView() {
-  const [mode, setMode] = createSignal<TimerMode>('duration');
+  const [mode, setMode] = createSignal<Mode>('timer');
 
   // Smart duration text input
   const [durationInput, setDurationInput] = createSignal<string>('5m');
@@ -89,11 +88,11 @@ export function CreatorLandingView() {
     const currentMode = mode();
     const params: string[] = [];
 
-    if (currentMode === 'duration') {
+    if (currentMode === 'timer') {
       const nowIso = new Date().toISOString();
       params.push(`startTime=${encodeURIComponent(nowIso)}`);
       params.push(`duration=${totalDurationSeconds()}s`);
-    } else if (currentMode === 'endTime') {
+    } else if (currentMode === 'countdown') {
       if (endTimeInput()) {
         const iso = new Date(endTimeInput()).toISOString();
         params.push(`endTime=${encodeURIComponent(iso)}`);
@@ -116,9 +115,9 @@ export function CreatorLandingView() {
     const currentMode = mode();
     const params: string[] = [];
 
-    if (currentMode === 'duration') {
+    if (currentMode === 'timer') {
       params.push(`duration=${totalDurationSeconds()}s`);
-    } else if (currentMode === 'endTime') {
+    } else if (currentMode === 'countdown') {
       if (endTimeInput()) {
         const iso = new Date(endTimeInput()).toISOString();
         params.push(`endTime=${encodeURIComponent(iso)}`);
@@ -160,47 +159,40 @@ export function CreatorLandingView() {
     <div class="min-h-screen bg-background text-on-background flex flex-col items-center justify-between py-10 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
       <div class="w-full max-w-3xl flex flex-col gap-8">
         
-        {/* Header Branding */}
-        <header class="text-center space-y-2">
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-primary text-xs font-semibold uppercase tracking-wider">
-            <Sparkles class="w-3.5 h-3.5" />
-            <span>Signal-Driven Precision</span>
-          </div>
+        {/* Header */}
+        <header class="text-center">
           <h1 class="text-5xl sm:text-6xl font-black tracking-tight text-primary font-mono">
             Kairos
           </h1>
-          <p class="text-on-surface-variant text-base sm:text-lg max-w-md mx-auto">
-            A distraction-free, zero-bloat countdown & timer. Clean, animated, and instant.
-          </p>
         </header>
 
         {/* Main Configuration Card */}
         <main class="bg-surface rounded-3xl border border-outline-variant p-6 sm:p-8 shadow-xl space-y-8">
           
-          {/* Mode Selector Tabs */}
+          {/* Mode Selector */}
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">
-              Countdown Mode
+              Mode
             </label>
             <div class="grid grid-cols-2 gap-2 p-1 bg-surface-container rounded-2xl border border-outline-variant">
               <button
                 type="button"
-                onClick={() => setMode('duration')}
+                onClick={() => setMode('timer')}
                 class={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium text-sm transition-all cursor-pointer ${
-                  mode() === 'duration'
+                  mode() === 'timer'
                     ? 'bg-primary text-on-primary shadow-md font-semibold'
                     : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
                 }`}
               >
                 <Timer class="w-4 h-4" />
-                <span>Duration</span>
+                <span>Timer</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setMode('endTime')}
+                onClick={() => setMode('countdown')}
                 class={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium text-sm transition-all cursor-pointer ${
-                  mode() === 'endTime'
+                  mode() === 'countdown'
                     ? 'bg-primary text-on-primary shadow-md font-semibold'
                     : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
                 }`}
@@ -211,9 +203,9 @@ export function CreatorLandingView() {
             </div>
           </div>
 
-          {/* Mode Configuration Form */}
+          {/* Configuration Form */}
           <div class="space-y-6">
-            <Show when={mode() === 'duration'}>
+            <Show when={mode() === 'timer'}>
               <div class="space-y-3">
                 <div>
                   <label class="block text-sm font-semibold text-on-surface mb-2">
@@ -224,13 +216,13 @@ export function CreatorLandingView() {
                       type="text"
                       value={durationInput()}
                       onInput={(e) => setDurationInput(e.currentTarget.value)}
-                      placeholder="e.g. 08:00-00:30-00:20, 01:00, 1h - 15m, 30m"
+                      placeholder="e.g. 25m, 1h, 08:00 - 00:30"
                       class="w-full bg-surface-container border border-outline-variant rounded-xl px-4 py-3 text-lg font-mono font-semibold text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
                 </div>
 
-                {/* Live Parsed Preview Badge */}
+                {/* Parsed Preview Badge */}
                 <div
                   class={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-mono transition-colors ${
                     parsedDuration().isValid
@@ -250,7 +242,7 @@ export function CreatorLandingView() {
                   </div>
                 </div>
 
-                {/* Quick Preset Chips */}
+                {/* Quick Presets */}
                 <div class="flex flex-wrap gap-2 pt-1">
                   <span class="text-xs text-on-surface-variant self-center mr-1">Presets:</span>
                   <button
@@ -323,10 +315,10 @@ export function CreatorLandingView() {
               </div>
             </Show>
 
-            <Show when={mode() === 'endTime'}>
+            <Show when={mode() === 'countdown'}>
               <div>
                 <label class="block text-sm font-semibold text-on-surface mb-2">
-                  Target End Date & Time
+                  End Time
                 </label>
                 <input
                   type="datetime-local"
@@ -378,12 +370,7 @@ export function CreatorLandingView() {
                   <div class={`p-2.5 rounded-xl ${soundEnabled() ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
                     {soundEnabled() ? <Volume2 class="w-5 h-5" /> : <VolumeX class="w-5 h-5" />}
                   </div>
-                  <div>
-                    <h4 class="font-semibold text-sm text-on-surface">Audio Chime on Zero</h4>
-                    <p class="text-xs text-on-surface-variant">
-                      {soundEnabled() ? 'Chime plays with dismiss button at 00:00:00' : 'Silent countdown (continues seamlessly into negatives)'}
-                    </p>
-                  </div>
+                  <span class="font-semibold text-sm text-on-surface">Sound</span>
                 </div>
                 <button
                   type="button"
@@ -408,12 +395,7 @@ export function CreatorLandingView() {
                   <div class={`p-2.5 rounded-xl ${animationEnabled() ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
                     {animationEnabled() ? <Zap class="w-5 h-5" /> : <ZapOff class="w-5 h-5" />}
                   </div>
-                  <div>
-                    <h4 class="font-semibold text-sm text-on-surface">Digit Roll Animation</h4>
-                    <p class="text-xs text-on-surface-variant">
-                      {animationEnabled() ? 'Smooth CSS roll on digit changes' : 'Instant static digits (no animations)'}
-                    </p>
-                  </div>
+                  <span class="font-semibold text-sm text-on-surface">Animation</span>
                 </div>
                 <button
                   type="button"
@@ -434,11 +416,11 @@ export function CreatorLandingView() {
             </div>
           </div>
 
-          {/* Shareable Link & Launch Section */}
+          {/* Share URL & Launch Section */}
           <div class="pt-4 border-t border-outline-variant space-y-4">
             <div>
               <label class="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
-                Shareable URL Preview
+                Share URL
               </label>
               <div class="relative flex items-center">
                 <input
@@ -460,14 +442,14 @@ export function CreatorLandingView() {
               </div>
             </div>
 
-            {/* Launch Countdown CTA */}
+            {/* Launch CTA */}
             <button
               type="button"
               onClick={handleLaunch}
               class="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-primary text-on-primary font-bold text-lg shadow-lg hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer"
             >
               <Play class="w-5 h-5 fill-current" />
-              <span>Launch Distraction-Free Countdown</span>
+              <span>{mode() === 'timer' ? 'Start Timer' : 'Start Countdown'}</span>
             </button>
           </div>
         </main>
@@ -476,14 +458,14 @@ export function CreatorLandingView() {
         <section class="bg-surface rounded-3xl border border-outline-variant p-6 sm:p-8 space-y-6">
           <div class="flex items-center gap-2 text-primary">
             <Palette class="w-5 h-5" />
-            <h2 class="font-bold text-lg text-on-surface">Themes</h2>
+            <h2 class="font-bold text-lg text-on-surface">Theme</h2>
           </div>
 
           <div class="space-y-4">
             {/* Color Presets */}
             <div>
               <label class="block text-xs font-semibold text-on-surface-variant mb-2">
-                Accent color
+                Accent
               </label>
               <div class="flex flex-wrap items-center gap-3">
                 <For each={PRESET_COLORS}>
@@ -524,7 +506,7 @@ export function CreatorLandingView() {
               <div class="flex items-center justify-between p-3.5 bg-surface-container rounded-2xl border border-outline-variant">
                 <div class="flex items-center gap-2.5">
                   {themeConfig().isDark ? <Moon class="w-4 h-4 text-primary" /> : <Sun class="w-4 h-4 text-primary" />}
-                  <span class="text-sm font-medium text-on-surface">Dark Theme</span>
+                  <span class="text-sm font-medium text-on-surface">Dark Mode</span>
                 </div>
                 <button
                   type="button"

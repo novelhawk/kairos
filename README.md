@@ -1,17 +1,14 @@
 # Kairos (καιρός)
 
-> A distraction-free, signal-driven minimal countdown and timer application built with SolidJS, Tailwind CSS v4, and Material Design Dynamic Colors.
+Minimal countdown and timer built with SolidJS, Tailwind CSS, and Material Design Dynamic Colors.
 
-## 🚀 Features
+## Features
 
-- **Distraction-Free Countdown**: Large, responsive, smooth animated digit ticker centered on a solid dark background with zero clutter.
-- **Signal-Driven Reactive Engine**: Built on SolidJS signals (`createSignal`, `createMemo`, `createEffect`) for high-precision, sub-millisecond DOM updates with zero Virtual DOM overhead.
-- **Negative Elapsed Counting**: When a timer expires:
-  - If `sound=false`: Continues seamlessly into negative counting (`-00:00:01`, `-00:00:02`) without flashing or interrupting.
-  - If `sound=true`: Plays a pleasant synthesized chime and reveals a dismiss button to stop the sound, while continuing negative counting.
-- **URL Hash Parameter Protocol**: All countdown configurations are preserved in URL hashes (`/countdown#duration=5m&sound=true`), making every countdown instantly shareable and 100% static CDN friendly.
-- **Material You Dynamic Theming**: Full `@material/material-color-utilities` dynamic palette system on the creator landing page, persisting user preferences to `localStorage`.
-- **Cloudflare Pages Ready**: Pre-configured with `wrangler.jsonc`, `public/_headers`, and static SPA fallback routing.
+- **Timer & Countdown**: Supports relative duration timers and absolute target countdowns.
+- **Negative Counting**: Continues counting into negatives past zero (`-00:00:01`, `-00:00:02`).
+- **Audio Alert**: Optional audio chime on completion with dismiss button.
+- **Shareable URLs**: Configurations encoded in URL hash parameters.
+- **Dynamic Theming**: Material Design Dynamic Colors with custom seeds, dark mode, and contrast settings.
 
 ---
 
