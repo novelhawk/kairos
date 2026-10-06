@@ -5,6 +5,7 @@ import {
   parseSmartDuration,
   type ParsedDuration,
 } from '../utils/timeParser';
+import { DurationField } from '../components/DurationField';
 import {
   Timer,
   Calendar,
@@ -37,8 +38,8 @@ const PRESET_COLORS = [
 export function CreatorLandingView() {
   const [mode, setMode] = createSignal<Mode>('timer');
 
-  // Smart duration text input
-  const [durationInput, setDurationInput] = createSignal<string>('5m');
+  // Smart duration text input (empty on page load)
+  const [durationInput, setDurationInput] = createSignal<string>('');
   const parsedDuration = createMemo<ParsedDuration>(() => parseSmartDuration(durationInput()));
 
   // End Time field (ISO local string)
@@ -58,10 +59,6 @@ export function CreatorLandingView() {
   // Clipboard copy state
   const [copied, setCopied] = createSignal<boolean>(false);
 
-  // Quick duration presets
-  const applyPresetDuration = (val: string) => {
-    setDurationInput(val);
-  };
 
   // Quick end-time shortcuts
   const addEndTimeMinutes = (mins: number) => {
@@ -80,7 +77,7 @@ export function CreatorLandingView() {
   // Duration in seconds
   const totalDurationSeconds = createMemo(() => {
     const p = parsedDuration();
-    return p.isValid && p.totalSeconds > 0 ? p.totalSeconds : 300;
+    return p.isValid ? p.totalSeconds : 0;
   });
 
   // Build the launch URL with automatic startTime upon launch
@@ -206,113 +203,11 @@ export function CreatorLandingView() {
           {/* Configuration Form */}
           <div class="space-y-6">
             <Show when={mode() === 'timer'}>
-              <div class="space-y-3">
-                <div>
-                  <label class="block text-sm font-semibold text-on-surface mb-2">
-                    Duration
-                  </label>
-                  <div class="relative">
-                    <input
-                      type="text"
-                      value={durationInput()}
-                      onInput={(e) => setDurationInput(e.currentTarget.value)}
-                      placeholder="e.g. 25m, 1h, 08:00 - 00:30"
-                      class="w-full bg-surface-container border border-outline-variant rounded-xl px-4 py-3 text-lg font-mono font-semibold text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                </div>
-
-                {/* Parsed Preview Badge */}
-                <div
-                  class={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-mono transition-colors ${
-                    parsedDuration().isValid
-                      ? 'bg-primary/10 text-primary border border-primary/20'
-                      : 'bg-error/10 text-error border border-error/20'
-                  }`}
-                >
-                  <div class="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
-                    {parsedDuration().isValid ? (
-                      <Check class="w-3.5 h-3.5 shrink-0" />
-                    ) : (
-                      <span class="font-bold shrink-0">!</span>
-                    )}
-                    <span class="truncate">
-                      {parsedDuration().isValid ? parsedDuration().formatted : (parsedDuration().error || parsedDuration().formatted)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Quick Presets */}
-                <div class="flex flex-wrap gap-2 pt-1">
-                  <span class="text-xs text-on-surface-variant self-center mr-1">Presets:</span>
-                  <button
-                    type="button"
-                    onClick={() => applyPresetDuration('5m')}
-                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
-                      durationInput() === '5m'
-                        ? 'bg-primary text-on-primary font-semibold'
-                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
-                    }`}
-                  >
-                    5m
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPresetDuration('15m')}
-                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
-                      durationInput() === '15m'
-                        ? 'bg-primary text-on-primary font-semibold'
-                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
-                    }`}
-                  >
-                    15m
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPresetDuration('25m')}
-                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
-                      durationInput() === '25m'
-                        ? 'bg-primary text-on-primary font-semibold'
-                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
-                    }`}
-                  >
-                    25m
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPresetDuration('30m')}
-                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
-                      durationInput() === '30m'
-                        ? 'bg-primary text-on-primary font-semibold'
-                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
-                    }`}
-                  >
-                    30m
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPresetDuration('45m')}
-                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
-                      durationInput() === '45m'
-                        ? 'bg-primary text-on-primary font-semibold'
-                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
-                    }`}
-                  >
-                    45m
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPresetDuration('1h')}
-                    class={`px-3 py-1 text-xs rounded-lg border border-outline-variant transition cursor-pointer ${
-                      durationInput() === '1h'
-                        ? 'bg-primary text-on-primary font-semibold'
-                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
-                    }`}
-                  >
-                    1h
-                  </button>
-                </div>
-              </div>
+              <DurationField
+                value={durationInput()}
+                onChange={setDurationInput}
+                parsed={parsedDuration()}
+              />
             </Show>
 
             <Show when={mode() === 'countdown'}>
@@ -363,26 +258,26 @@ export function CreatorLandingView() {
             </Show>
 
             {/* Options Row: Sound Toggle & Animation Toggle */}
-            <div class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Sound Toggle */}
-              <div class="flex items-center justify-between p-4 bg-surface-container rounded-2xl border border-outline-variant">
-                <div class="flex items-center gap-3">
-                  <div class={`p-2.5 rounded-xl ${soundEnabled() ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                    {soundEnabled() ? <Volume2 class="w-5 h-5" /> : <VolumeX class="w-5 h-5" />}
+              <div class="flex items-center justify-between p-3.5 bg-surface-container rounded-2xl border border-outline-variant">
+                <div class="flex items-center gap-2.5">
+                  <div class={`p-2 rounded-xl ${soundEnabled() ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                    {soundEnabled() ? <Volume2 class="w-4 h-4" /> : <VolumeX class="w-4 h-4" />}
                   </div>
                   <span class="font-semibold text-sm text-on-surface">Sound</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSoundEnabled(!soundEnabled())}
-                  class={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors cursor-pointer ${
+                  class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
                     soundEnabled() ? 'bg-primary' : 'bg-surface-container-highest'
                   }`}
                   role="switch"
                   aria-checked={soundEnabled()}
                 >
                   <span
-                    class={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                    class={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                       soundEnabled() ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
@@ -390,24 +285,24 @@ export function CreatorLandingView() {
               </div>
 
               {/* Animation Toggle */}
-              <div class="flex items-center justify-between p-4 bg-surface-container rounded-2xl border border-outline-variant">
-                <div class="flex items-center gap-3">
-                  <div class={`p-2.5 rounded-xl ${animationEnabled() ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                    {animationEnabled() ? <Zap class="w-5 h-5" /> : <ZapOff class="w-5 h-5" />}
+              <div class="flex items-center justify-between p-3.5 bg-surface-container rounded-2xl border border-outline-variant">
+                <div class="flex items-center gap-2.5">
+                  <div class={`p-2 rounded-xl ${animationEnabled() ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                    {animationEnabled() ? <Zap class="w-4 h-4" /> : <ZapOff class="w-4 h-4" />}
                   </div>
                   <span class="font-semibold text-sm text-on-surface">Animation</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setAnimationEnabled(!animationEnabled())}
-                  class={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors cursor-pointer ${
+                  class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
                     animationEnabled() ? 'bg-primary' : 'bg-surface-container-highest'
                   }`}
                   role="switch"
                   aria-checked={animationEnabled()}
                 >
                   <span
-                    class={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                    class={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                       animationEnabled() ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
