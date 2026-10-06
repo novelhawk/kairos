@@ -3,9 +3,12 @@ import { themeConfig, updateThemePreferences } from '../theme/materialTheme';
 import { navigate } from '../utils/router';
 import {
   parseSmartDuration,
+  formatDurationHuman,
   type ParsedDuration,
 } from '../utils/timeParser';
 import { DurationField } from '../components/DurationField';
+import type { CountdownConfig } from '../utils/router';
+import { currentRoute } from '../utils/router';
 import {
   Timer,
   Calendar,
@@ -35,11 +38,24 @@ const PRESET_COLORS = [
   { name: 'Emerald', hex: '#10B981' },
 ];
 
-export function CreatorLandingView() {
+export interface CreatorLandingViewProps {
+  config?: CountdownConfig;
+}
+
+export function CreatorLandingView(props?: CreatorLandingViewProps) {
+  const initialConfig = () => props?.config || currentRoute().config;
+
   const [mode, setMode] = createSignal<Mode>('timer');
 
-  // Smart duration text input (empty on page load)
-  const [durationInput, setDurationInput] = createSignal<string>('');
+  // Smart duration text input (populated from config if present, or empty on page load)
+  const getInitialDuration = () => {
+    const cfg = initialConfig();
+    if (cfg.rawDuration) return cfg.rawDuration;
+    if (cfg.durationSeconds && cfg.durationSeconds > 0) return formatDurationHuman(cfg.durationSeconds);
+    return '';
+  };
+
+  const [durationInput, setDurationInput] = createSignal<string>(getInitialDuration());
   const parsedDuration = createMemo<ParsedDuration>(() => parseSmartDuration(durationInput()));
 
   // End Time field (ISO local string)
@@ -50,11 +66,11 @@ export function CreatorLandingView() {
   };
   const [endTimeInput, setEndTimeInput] = createSignal<string>(defaultEndTime());
 
-  // Sound toggle (default false)
-  const [soundEnabled, setSoundEnabled] = createSignal<boolean>(false);
+  // Sound toggle (initialized from config)
+  const [soundEnabled, setSoundEnabled] = createSignal<boolean>(initialConfig().sound ?? false);
 
-  // Animation toggle (default true)
-  const [animationEnabled, setAnimationEnabled] = createSignal<boolean>(true);
+  // Animation toggle (initialized from config)
+  const [animationEnabled, setAnimationEnabled] = createSignal<boolean>(initialConfig().animate ?? true);
 
   // Clipboard copy state
   const [copied, setCopied] = createSignal<boolean>(false);
