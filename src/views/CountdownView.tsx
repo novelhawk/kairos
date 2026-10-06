@@ -1,6 +1,7 @@
 import { createSignal, createMemo, createEffect, onCleanup, Show } from 'solid-js';
 import type { CountdownConfig } from '../utils/router';
-import { formatTimeDifference } from '../utils/timeParser';
+import { navigate } from '../utils/router';
+import { formatTimeDifference, formatDurationHuman } from '../utils/timeParser';
 import { soundEngine } from '../utils/soundSynthesizer';
 import { CountdownUnit, Separator } from '../components/AnimatedDigit';
 import { VolumeX, BellRing } from 'lucide-solid';
@@ -70,6 +71,44 @@ export function CountdownView(props: CountdownViewProps) {
     soundEngine.stopAlarmLoop();
     setIsRinging(false);
   };
+
+  const handleEdit = () => {
+    soundEngine.stopAlarmLoop();
+    const delta = targetMs() - now();
+    const remainingSecs = Math.max(0, Math.round(delta / 1000));
+    const formattedDuration = formatDurationHuman(remainingSecs);
+
+    const params: string[] = [];
+    params.push(`duration=${encodeURIComponent(formattedDuration)}`);
+    if (props.config.sound) {
+      params.push('sound=true');
+    }
+    if (!props.config.animate) {
+      params.push('animate=false');
+    }
+
+    navigate(`/#${params.join('&')}`);
+  };
+
+  createEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+      if (e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        handleEdit();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => {
+      window.removeEventListener('keydown', handleKeyDown);
+    });
+  });
 
   return (
     <div class="fixed inset-0 flex flex-col items-center justify-center bg-background text-primary select-none overflow-hidden p-4">

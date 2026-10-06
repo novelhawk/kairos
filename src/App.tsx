@@ -7,7 +7,7 @@ export function App() {
   return (
     <Show
       when={currentRoute().path === 'countdown'}
-      fallback={<CreatorLandingView />}
+      fallback={<CreatorLandingView config={currentRoute().config} />}
     >
       <CountdownView config={currentRoute().config} />
     </Show>
